@@ -14,7 +14,7 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: '3/5 * * * *'
+    - cron: '*/5 * * * *'
 
 permissions:
   contents: write # Save the last known availability, avoiding repeat alerts.
