@@ -4,7 +4,7 @@ This project checks two Eventer workshop pages for a **visible** ordering option
 
 ## 1. Test the page checks
 
-Open **Actions → Check Eventer workshops → Run workflow**, leave `check_only` checked, then inspect the run log. Both pages currently show a sold-out message, so each should report `sold_out`. The test sends no Telegram message and saves no state.
+Open **Actions → Check Eventer workshops → Run workflow**, leave `check_only` checked, then inspect the run log. The run log reports `sold_out`, `open`, or `unknown` for each page. The test sends no Telegram message and saves no state.
 
 ## 2. Set up Telegram
 
@@ -14,10 +14,8 @@ Open **Actions → Check Eventer workshops → Run workflow**, leave `check_only
 4. In GitHub, open **Settings → Secrets and variables → Actions → New repository secret**. Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` separately.
 5. Run the workflow manually with `check_only` **unchecked**. An alert is sent immediately if a place is currently open. If both pages are sold out, this run only saves the initial statuses.
 
-## 3. Enable checks every five minutes
+## 3. Automatic checks
 
-This repository was private when the monitor was prepared. GitHub Free has a monthly minute limit for private repository Actions. At five-minute intervals the monitor can exceed that limit. Make this repository **Public** under **Settings → General → Danger Zone → Change repository visibility** if you are comfortable publishing this source code and its non-sensitive availability state. GitHub Actions secrets remain separate from the code.
+The repository is public and the workflow checks both pages at minute 2, 7, 12, etc. of every hour (UTC). Scheduled runs send Telegram only when an event becomes open. The latest confirmed status is saved in `monitor_state.json` to avoid repeated alerts. The bot token and chat ID stay in GitHub Actions secrets and are never written to the repository.
 
-After the repository is public and the manual test succeeds, edit `.github/workflows/monitor.yml` on the `main` branch: remove the leading `#` and space from the two `schedule:` lines. Save the file. The schedule starts checking at minute 2, 7, 12, etc. of each hour in UTC. GitHub may delay or skip scheduled runs, so an opening between checks can be missed. Scheduled workflows in inactive public repositories can be disabled after 60 days; successful state commits count as activity only when availability changes.
-
-The monitor writes `monitor_state.json` to the repository when a confirmed status changes. It never writes a bot token or chat ID. To stop the checks, comment out the two schedule lines again or disable the workflow from the Actions tab.
+GitHub can delay or skip scheduled runs, so a short opening between checks can be missed. GitHub disables scheduled workflows in inactive public repositories after 60 days. To stop checking, remove the `schedule` section from `.github/workflows/monitor.yml` or disable the workflow from the Actions tab.
