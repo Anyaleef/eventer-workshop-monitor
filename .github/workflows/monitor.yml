@@ -8,10 +8,8 @@ on:
         required: true
         type: boolean
         default: true
-  # After making this repository public and configuring Telegram secrets,
-  # enable the following schedule. Scheduled runs automatically send alerts.
-  # schedule:
-  #   - cron: '2/5 * * * *'
+  schedule:
+    - cron: '2/5 * * * *'
 
 permissions:
   contents: write # Save the last known availability, avoiding repeat alerts.
@@ -22,13 +20,13 @@ concurrency:
 
 jobs:
   monitor:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 6
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: true
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
           cache: pip
