@@ -1,8 +1,9 @@
-name: Schedule probe (every 30 minutes)
+name: Schedule probe (hourly)
 
 on:
   schedule:
-    - cron: '3,33 * * * *'
+    - cron: '13 * * * *'
+      timezone: 'Asia/Jerusalem'
 
 permissions:
   contents: read
