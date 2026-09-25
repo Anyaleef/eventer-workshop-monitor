@@ -13,6 +13,7 @@ Open **Actions → Check Eventer workshops → Run workflow**, leave `check_only
 3. In your own browser, visit `https://api.telegram.org/bot<TOKEN>/getUpdates`, replacing `<TOKEN>` with your bot token. Find `message.chat.id` in the response. Do not paste the token or chat ID into this repository or into a public conversation.
 4. In GitHub, open **Settings → Secrets and variables → Actions → New repository secret**. Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` separately.
 5. Run the workflow manually with `check_only` **unchecked**. An alert is sent immediately if a place is currently open. If both pages are sold out, this run only saves the initial statuses.
+6. To verify the Telegram connection, run the workflow with `test_telegram` checked. It sends one test message to the configured chat, even if `check_only` remains checked. It does not alter availability state.
 
 ## 3. Automatic checks
 
