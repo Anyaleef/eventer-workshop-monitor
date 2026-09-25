@@ -1,10 +1,11 @@
-"""Check two Eventer workshops and send a Telegram alert on a new opening."""
+"""Check two Eventer workshops and report changes and hourly status to Telegram."""
 
 import argparse
 import json
 import os
 import re
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -63,8 +64,33 @@ def send_telegram_text(message):
         raise RuntimeError("Telegram did not accept the alert")
 
 
-def send_telegram(name, url):
-    send_telegram_text(f"נראה שנפתחה אפשרות להזמין מקום בסדנה:\n{name}\n{url}\n\nבדקי את העמוד לפני שהמקום נתפס.")
+def status_line(name, status):
+    label = "🟢 ניתן להירשם" if status == "open" else "🔴 אין כרגע אפשרות להירשם"
+    return f"{label}: {name}"
+
+
+def unchanged_message(statuses):
+    lines = ["🔵 אין שינוי בזמינות הסדנאות מאז הבדיקה הקודמת:"]
+    lines.extend(status_line(WORKSHOPS[key][0], status) for key, status in statuses.items())
+    return "\n".join(lines)
+
+
+def changed_message(changes):
+    lines = ["🟡 שינוי בזמינות הסדנאות:"]
+    for key, status in changes.items():
+        name, url = WORKSHOPS[key]
+        lines.extend((status_line(name, status), url))
+    return "\n".join(lines)
+
+
+def hourly_notice_due(state, now):
+    previous = state.get("_last_no_change_message_at")
+    if not previous:
+        return True
+    try:
+        return now - datetime.fromisoformat(previous) >= timedelta(hours=1)
+    except (TypeError, ValueError):
+        return True
 
 
 def load_state():
@@ -86,12 +112,13 @@ def main():
         parser.error("Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in GitHub Actions secrets first")
 
     if args.test_telegram:
-        send_telegram_text("בדיקת התראות Eventer: החיבור לטלגרם פועל.")
+        send_telegram_text("🔵 בדיקת התראות Eventer: החיבור לטלגרם פועל.")
         print("Telegram test message sent", flush=True)
         return
 
     state = load_state()
     failed = False
+    statuses = {}
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -99,27 +126,34 @@ def main():
                 try:
                     status = check_page(browser, url)
                     print(f"{key}: {status}", flush=True)
-                    if status == "unknown":
+                    if status not in ("open", "sold_out"):
                         failed = True
                         continue
-                    if args.check_only:
-                        continue
-                    if status == "open" and state.get(key) != "open":
-                        send_telegram(name, url)
-                        print(f"{key}: Telegram alert sent", flush=True)
-                    state[key] = status
+                    statuses[key] = status
                 except Exception as exc:
                     print(f"{key}: check or notification failed: {exc}", file=sys.stderr, flush=True)
                     failed = True
         finally:
             browser.close()
 
+    # An incomplete check must never be reported as "no change" or saved.
+    if failed:
+        sys.exit(1)
+
     if not args.check_only:
+        changes = {key: status for key, status in statuses.items() if state.get(key) != status}
+        now = datetime.now(timezone.utc)
+        if changes:
+            send_telegram_text(changed_message(changes))
+            print("Telegram change alert sent", flush=True)
+        elif hourly_notice_due(state, now):
+            send_telegram_text(unchanged_message(statuses))
+            state["_last_no_change_message_at"] = now.isoformat()
+            print("Telegram no-change status sent", flush=True)
+        state.update(statuses)
         temp = STATE_FILE.with_suffix(".json.tmp")
         temp.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         temp.replace(STATE_FILE)
-    if failed:
-        sys.exit(1)
 
 
 if __name__ == "__main__":
