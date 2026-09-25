@@ -2,11 +2,6 @@
 
 This project checks two Eventer workshop pages for a **visible** ordering option. It sends a Telegram message when a workshop changes to open, and sends another only if it first becomes sold out and later reopens. A failed or unclear page load never counts as an opening.
 
-| Workshop | Page |
-| --- | --- |
-| Claude Code for Everyone, first cohort | https://www.eventer.co.il/t242f |
-| Claude Code for Everyone, second cohort | https://www.eventer.co.il/rmh2f |
-
 ## 1. Test the page checks
 
 Open **Actions → Check Eventer workshops → Run workflow**, leave `check_only` checked, then inspect the run log. Both pages currently show a sold-out message, so each should report `sold_out`. The test sends no Telegram message and saves no state.
