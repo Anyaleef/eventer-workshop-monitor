@@ -1,22 +1,22 @@
 # Eventer workshop availability monitor
 
-This project checks two Eventer workshop pages for a **visible** ordering option. It sends a Telegram message when a workshop changes to open, and sends another only if it first becomes sold out and later reopens. A failed or unclear page load never counts as an opening.
+The monitor checks two Eventer workshop pages for a visible ordering option:
 
-## 1. Test the page checks
+| Workshop | Page |
+| --- | --- |
+| Claude Code for Everyone, first cohort | https://www.eventer.co.il/t242f |
+| Claude Code for Everyone, second cohort | https://www.eventer.co.il/rmh2f |
 
-Open **Actions → Check Eventer workshops → Run workflow**, leave `check_only` checked, then inspect the run log. The run log reports `sold_out`, `open`, or `unknown` for each page. The test sends no Telegram message and saves no state.
+## Test a run
 
-## 2. Set up Telegram
+In **Actions → Check Eventer workshops → Run workflow**, leave `check_only` checked to inspect both page statuses without sending Telegram or saving state. The log reports `sold_out`, `open`, or `unknown`. To test the Telegram connection, check `test_telegram`; this sends one test message without checking Eventer or changing availability state.
 
-1. In Telegram, message **@BotFather** with `/newbot` and follow its instructions. Keep the token private.
-2. Open a direct chat with your new bot and send `/start` or any message.
-3. In your own browser, visit `https://api.telegram.org/bot<TOKEN>/getUpdates`, replacing `<TOKEN>` with your bot token. Find `message.chat.id` in the response. Do not paste the token or chat ID into this repository or into a public conversation.
-4. In GitHub, open **Settings → Secrets and variables → Actions → New repository secret**. Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` separately.
-5. Run the workflow manually with `check_only` **unchecked**. An alert is sent immediately if a place is currently open. If both pages are sold out, this run only saves the initial statuses.
-6. To verify the Telegram connection, run the workflow with `test_telegram` checked. It sends one test message to the configured chat, even if `check_only` remains checked. It does not alter availability state.
+The repository secrets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are required for a normal run. They are never written to the repository.
 
-## 3. Automatic checks
+## Automatic checks and notifications
 
-The repository is public and the workflow checks both pages at minute 2, 7, 12, etc. of every hour (UTC). Scheduled runs send Telegram only when an event becomes open. The latest confirmed status is saved in `monitor_state.json` to avoid repeated alerts. The bot token and chat ID stay in GitHub Actions secrets and are never written to the repository.
+The main workflow is scheduled every five minutes. A confirmed change sends a Telegram message immediately: 🟢 means registration opened, 🔴 means it closed, and the message includes the direct link to every affected workshop page. If neither page changed, 🔵 reports both current statuses at most once an hour. The latest confirmed statuses and time of the last unchanged message are saved in `monitor_state.json`. Incomplete checks fail the run and do not send a misleading unchanged message or save partial statuses.
 
-GitHub can delay or skip scheduled runs, so a short opening between checks can be missed. GitHub disables scheduled workflows in inactive public repositories after 60 days. To stop checking, remove the `schedule` section from `.github/workflows/monitor.yml` or disable the workflow from the Actions tab.
+The independent `Schedule probe (hourly)` workflow is scheduled at minute 13 of each hour in Israel time. It only records its event type and UTC time in the run log; it does not check Eventer or send Telegram. An Actions run with `event=schedule` confirms that GitHub started an automatic run. A manual run does not confirm this.
+
+GitHub can delay or drop scheduled runs, so a short opening may be missed. Until a run with `event=schedule` appears, automatic checking is not verified. In inactive public repositories GitHub can disable scheduled workflows after 60 days. To stop checking, disable the main workflow in Actions or remove its `schedule` block.
