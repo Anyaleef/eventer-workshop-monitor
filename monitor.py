@@ -52,16 +52,19 @@ def check_page(browser, url):
         page.close()
 
 
-def send_telegram(name, url):
+def send_telegram_text(message):
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
-    message = f"נראה שנפתחה אפשרות להזמין מקום בסדנה:\n{name}\n{url}\n\nבדקי את העמוד לפני שהמקום נתפס."
     payload = urlencode({"chat_id": chat_id, "text": message}).encode("utf-8")
     request = Request(f"https://api.telegram.org/bot{token}/sendMessage", data=payload, method="POST")
     with urlopen(request, timeout=20) as response:
         result = json.load(response)
     if not result.get("ok"):
         raise RuntimeError("Telegram did not accept the alert")
+
+
+def send_telegram(name, url):
+    send_telegram_text(f"נראה שנפתחה אפשרות להזמין מקום בסדנה:\n{name}\n{url}\n\nבדקי את העמוד לפני שהמקום נתפס.")
 
 
 def load_state():
@@ -75,10 +78,17 @@ def load_state():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--check-only", action="store_true", help="Report status without sending alerts or saving state")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--check-only", action="store_true", help="Report status without sending alerts or saving state")
+    mode.add_argument("--test-telegram", action="store_true", help="Send one test message without checking Eventer")
     args = parser.parse_args()
     if not args.check_only and not (os.getenv("TELEGRAM_BOT_TOKEN") and os.getenv("TELEGRAM_CHAT_ID")):
         parser.error("Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in GitHub Actions secrets first")
+
+    if args.test_telegram:
+        send_telegram_text("בדיקת התראות Eventer: החיבור לטלגרם פועל.")
+        print("Telegram test message sent", flush=True)
+        return
 
     state = load_state()
     failed = False
