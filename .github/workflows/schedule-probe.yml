@@ -1,0 +1,18 @@
+name: Schedule probe (every 30 minutes)
+
+on:
+  schedule:
+    - cron: '3,33 * * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Record the automatic trigger
+        run: |
+          echo "event=${{ github.event_name }}"
+          date -u '+utc=%Y-%m-%dT%H:%M:%SZ'
