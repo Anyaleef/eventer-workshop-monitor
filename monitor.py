@@ -134,6 +134,7 @@ def active_workshops(today):
 def main():
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--manual", action="store_true", help="Always send the full status without changing automatic monitoring state")
     mode.add_argument("--check-only", action="store_true", help="Report status without sending alerts or saving state")
     mode.add_argument("--test-telegram", action="store_true", help="Send one test message without checking Eventer")
     args = parser.parse_args()
@@ -178,6 +179,12 @@ def main():
     if failed:
         sys.exit(1)
     if not statuses:
+        return
+
+    if args.manual:
+        changes = {key: status for key, status in statuses.items() if state.get(key) != status}
+        send_telegram_text(availability_message(statuses, changes))
+        print("Telegram full manual status sent; automatic state unchanged", flush=True)
         return
 
     if not args.check_only:
