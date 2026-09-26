@@ -5,10 +5,11 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+from zoneinfo import ZoneInfo
 
 from playwright.sync_api import sync_playwright
 
@@ -17,6 +18,11 @@ WORKSHOPS = {
     "t242f": ("Claude Code for Everyone – מחזור ראשון", "https://www.eventer.co.il/t242f"),
     "rmh2f": ("Claude Code for Everyone – מחזור שני", "https://www.eventer.co.il/rmh2f"),
 }
+END_DATES = {
+    "t242f": date(2026, 10, 11),  # Stop at midnight, Israel time.
+    "rmh2f": date(2026, 10, 13),
+}
+ISRAEL_TIME = ZoneInfo("Asia/Jerusalem")
 STATE_FILE = Path("monitor_state.json")
 SOLD_OUT = 'h2[ng-if*="purchaseFrameSoldOutMsg"]'
 ORDER_BUTTON = '[rnd-id="navigate_to_transaction"]'
@@ -67,7 +73,7 @@ def send_telegram_text(message):
 def availability_message(statuses, changes):
     first_url = WORKSHOPS["t242f"][1]
     second_url = WORKSHOPS["rmh2f"][1]
-    opened = [key for key in WORKSHOPS if changes.get(key) == "open"]
+    opened = [key for key in statuses if changes.get(key) == "open"]
     if len(opened) == 2:
         return ("🔵 *נפתחו מקומות הרשמה חדשים!*\n"
                 "ניתן להירשם לשני המחזורים של Claude Code for Everyone\n"
@@ -79,12 +85,18 @@ def availability_message(statuses, changes):
                 f"ניתן להירשם למחזור {cohort} של Claude Code for Everyone\n"
                 f"{WORKSHOPS[key][1]}")
     if all(status == "sold_out" for status in statuses.values()):
+        if len(statuses) == 1:
+            key = next(iter(statuses))
+            cohort = 1 if key == "t242f" else 2
+            return ("🔴 *אין מקומות הרשמה פנויים*\n"
+                    f"מחזור {cohort} של Claude Code for Everyone סגור להרשמה.\n"
+                    f"- מחזור {cohort}: {WORKSHOPS[key][1]}")
         return ("🔴 *אין מקומות הרשמה פנויים*\n"
                 "שני המחזורים של Claude Code for Everyone סגורים להרשמה.\n"
                 f"- מחזור 1: {first_url}\n- מחזור 2: {second_url}")
 
     # An unchanged open page must not be reported as newly opened or closed.
-    open_keys = [key for key in WORKSHOPS if statuses[key] == "open"]
+    open_keys = [key for key in statuses if statuses[key] == "open"]
     if len(open_keys) == 2:
         return ("🔵 *ההרשמה עדיין פתוחה*\n"
                 "ניתן להירשם לשני המחזורים של Claude Code for Everyone\n"
@@ -115,19 +127,29 @@ def load_state():
     return state
 
 
+def active_workshops(today):
+    return {key: workshop for key, workshop in WORKSHOPS.items() if today < END_DATES[key]}
+
+
 def main():
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--check-only", action="store_true", help="Report status without sending alerts or saving state")
     mode.add_argument("--test-telegram", action="store_true", help="Send one test message without checking Eventer")
     args = parser.parse_args()
-    if not args.check_only and not (os.getenv("TELEGRAM_BOT_TOKEN") and os.getenv("TELEGRAM_CHAT_ID")):
-        parser.error("Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in GitHub Actions secrets first")
-
     if args.test_telegram:
+        if not (os.getenv("TELEGRAM_BOT_TOKEN") and os.getenv("TELEGRAM_CHAT_ID")):
+            parser.error("Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in GitHub Actions secrets first")
         send_telegram_text("🔵 בדיקת התראות Eventer: החיבור לטלגרם פועל.")
         print("Telegram test message sent", flush=True)
         return
+
+    workshops = active_workshops(datetime.now(ISRAEL_TIME).date())
+    if not workshops:
+        print("Monitoring period finished; no pages checked or messages sent", flush=True)
+        return
+    if not args.check_only and not (os.getenv("TELEGRAM_BOT_TOKEN") and os.getenv("TELEGRAM_CHAT_ID")):
+        parser.error("Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in GitHub Actions secrets first")
 
     state = load_state()
     failed = False
@@ -135,7 +157,10 @@ def main():
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
-            for key, (name, url) in WORKSHOPS.items():
+            for key, (name, url) in workshops.items():
+                if datetime.now(ISRAEL_TIME).date() >= END_DATES[key]:
+                    print(f"{key}: monitoring period finished", flush=True)
+                    continue
                 try:
                     status = check_page(browser, url)
                     print(f"{key}: {status}", flush=True)
@@ -152,6 +177,8 @@ def main():
     # An incomplete check must never be reported as "no change" or saved.
     if failed:
         sys.exit(1)
+    if not statuses:
+        return
 
     if not args.check_only:
         changes = {key: status for key, status in statuses.items() if state.get(key) != status}
