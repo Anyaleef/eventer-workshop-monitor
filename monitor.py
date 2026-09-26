@@ -11,9 +11,6 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
-from playwright.sync_api import sync_playwright
-
-
 WORKSHOPS = {
     "t242f": ("Claude Code for Everyone – מחזור ראשון", "https://www.eventer.co.il/t242f"),
     "rmh2f": ("Claude Code for Everyone – מחזור שני", "https://www.eventer.co.il/rmh2f"),
@@ -127,8 +124,30 @@ def load_state():
     return state
 
 
+def save_state(state):
+    temp = STATE_FILE.with_suffix(".json.tmp")
+    temp.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temp.replace(STATE_FILE)
+
+
 def active_workshops(today):
     return {key: workshop for key, workshop in WORKSHOPS.items() if today < END_DATES[key]}
+
+
+def send_end_notices():
+    today = datetime.now(ISRAEL_TIME).date()
+    state = load_state()
+    for key, end_date in END_DATES.items():
+        if today != end_date:
+            continue
+        notice_key = f"_end_notice_{key}"
+        if state.get(notice_key) == today.isoformat():
+            continue
+        cohort = 1 if key == "t242f" else 2
+        send_telegram_text(f"*שימו לב*, הבדיקה עבור מחזור {cohort} מסתיימת היום.")
+        state[notice_key] = today.isoformat()
+        save_state(state)
+        print(f"Cohort {cohort} end notice sent", flush=True)
 
 
 def main():
@@ -137,7 +156,11 @@ def main():
     mode.add_argument("--manual", action="store_true", help="Always send the full status without changing automatic monitoring state")
     mode.add_argument("--check-only", action="store_true", help="Report status without sending alerts or saving state")
     mode.add_argument("--test-telegram", action="store_true", help="Send one test message without checking Eventer")
+    mode.add_argument("--end-notices", action="store_true", help="Send due cutoff notices once, without checking Eventer")
     args = parser.parse_args()
+    if args.end_notices:
+        send_end_notices()
+        return
     if args.test_telegram:
         if not (os.getenv("TELEGRAM_BOT_TOKEN") and os.getenv("TELEGRAM_CHAT_ID")):
             parser.error("Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in GitHub Actions secrets first")
@@ -155,6 +178,8 @@ def main():
     state = load_state()
     failed = False
     statuses = {}
+    from playwright.sync_api import sync_playwright
+
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -198,9 +223,7 @@ def main():
             state["_last_no_change_message_at"] = now.isoformat()
             print("Telegram no-change status sent", flush=True)
         state.update(statuses)
-        temp = STATE_FILE.with_suffix(".json.tmp")
-        temp.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        temp.replace(STATE_FILE)
+        save_state(state)
 
 
 if __name__ == "__main__":
