@@ -1,26 +1,10 @@
-# Eventer workshop availability monitor
+# Workshop monitor
 
-The monitor checks two Eventer workshop pages for a visible ordering option:
+![Status](https://img.shields.io/badge/status-active-brightgreen)
+![Use](https://img.shields.io/badge/use-personal%20only-orange)
 
-| Workshop | Page |
-| --- | --- |
-| Claude Code for Everyone, first cohort | https://www.eventer.co.il/t242f |
-| Claude Code for Everyone, second cohort | https://www.eventer.co.il/rmh2f |
+Personal project for monitoring Claude Code for Everyone workshops. Not intended for public use.
 
-## Run manually
-
-In **Actions → Check Eventer workshops → Run workflow**, start a manual run. Every manual run checks the active cohort pages and sends one full Telegram status message, even if the status has not changed. The run log reports `sold_out`, `open`, or `unknown` for each checked page. Manual runs do not write `monitor_state.json` and do not reset the automatic hourly status timer. The script's `--check-only` flag remains available for local diagnostics without sending Telegram.
-
-The repository secrets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are required for a normal run. They are never written to the repository.
-
-## Automatic checks and notifications
-
-The main workflow is scheduled every five minutes. Cohort 1 is checked through October 10, 2026, and cohort 2 through October 12, 2026. Each check stops at 00:00 Israel time on the following date (October 11 and October 13, respectively). On October 11, a scheduled run sends one short notice that cohort 1's monitoring ends that day; on October 13 it sends the corresponding notice for cohort 2. Their delivery is recorded in `monitor_state.json`, so later scheduled runs that day do not send duplicates. From October 11 onward, availability messages mention only cohort 2. From October 13 onward, no Eventer pages are checked and no availability messages are sent; scheduled runs can still send the cohort 2 end notice before exiting after a quick date check. Manual runs do not send end notices.
-
-The scheduled workflow also checks the [Technion AI Days activity list](https://aidays.technion.ac.il/) through October 22, 2026 (Israel time). It expands cards titled "סדנה מעשית – Claude Code for Everyone", including newly added cohorts, and compares registration links with the two existing Eventer URLs and any links previously announced. Each genuinely new registration URL produces one 🟠 Telegram alert with the card's title, short description, and URL. No listing message is sent when there is no new link. Tracking parameters, fragments, and trailing slashes do not count as new links. Successfully announced new links are saved in `monitor_state.json` to avoid repeat alerts. If the listing fails to load, the run fails visibly rather than reporting no change. The listing check continues even if an Eventer availability check fails, and stops October 23 at 00:00 Israel time. Manual runs continue to report the Eventer status only.
-
-When one cohort opens, the bot sends a 🟢 message with that cohort's link. When both open at the same check, it sends a 🔵 message with both links. When all monitored cohorts are closed, it sends a 🔴 message with their links. If registration remains open without a new opening, the bot reports that it is still open. Telegram messages use Markdown for bold headings. On scheduled runs, a confirmed change sends a message immediately; unchanged status sends at most one message per hour. Only scheduled runs update `monitor_state.json`. Incomplete checks fail the run and do not send an unchanged message or save partial statuses. Manual and scheduled runs use separate concurrency groups so a manual run does not queue scheduled checks.
-
-The independent `Schedule probe (hourly)` workflow is scheduled at minute 13 of each hour in Israel time. It only records its event type and UTC time in the run log; it does not check Eventer or send Telegram. An Actions run with `event=schedule` confirms that GitHub started an automatic run. A manual run does not confirm this.
-
-GitHub can delay or drop scheduled runs, so a short opening may be missed even though the schedule is set to every five minutes. Confirm actual execution by inspecting the `event=schedule` runs. In inactive public repositories GitHub can disable scheduled workflows after 60 days. To stop checking, disable the main workflow in Actions or remove its `schedule` block.
+- Scheduled runs check registration availability and look for new workshop links in the AI Days activity list. Telegram receives status updates and alerts for new links; unchanged listings produce no listing alert.
+- Manual runs send the current registration status without changing the automatic monitoring state.
+- Cohort checks end on October 11 and 13, 2026. Activity-list checks end on October 23, 2026 (Israel time).
