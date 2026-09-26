@@ -7,9 +7,9 @@ The monitor checks two Eventer workshop pages for a visible ordering option:
 | Claude Code for Everyone, first cohort | https://www.eventer.co.il/t242f |
 | Claude Code for Everyone, second cohort | https://www.eventer.co.il/rmh2f |
 
-## Test a run
+## Run manually
 
-In **Actions → Check Eventer workshops → Run workflow**, leave `check_only` checked to inspect both page statuses without sending Telegram or saving state. The log reports `sold_out`, `open`, or `unknown`. To test the Telegram connection, check `test_telegram`; this sends one test message without checking Eventer or changing availability state.
+In **Actions → Check Eventer workshops → Run workflow**, start a manual run. Every manual run checks the active cohort pages and sends one full Telegram status message, even if the status has not changed. The run log reports `sold_out`, `open`, or `unknown` for each checked page. Manual runs do not write `monitor_state.json` and do not reset the automatic hourly status timer. The script's `--check-only` flag remains available for local diagnostics without sending Telegram.
 
 The repository secrets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are required for a normal run. They are never written to the repository.
 
@@ -17,7 +17,7 @@ The repository secrets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are required 
 
 The main workflow is scheduled every five minutes. Cohort 1 is checked through October 10, 2026, and cohort 2 through October 12, 2026. Each check stops at 00:00 Israel time on the following date (October 11 and October 13, respectively). From October 11 onward, messages mention only cohort 2. From October 13 onward, no Eventer pages are checked and no availability messages are sent; scheduled runs exit after a quick date check.
 
-When one cohort opens, the bot sends a 🟢 message with that cohort's link. When both open at the same check, it sends a 🔵 message with both links. When all monitored cohorts are closed, it sends a 🔴 message with their links. If registration remains open without a new opening, the bot reports that it is still open. Telegram messages use Markdown for bold headings. A confirmed change sends a message immediately; unchanged status sends at most one message per hour. The latest confirmed statuses and time of the last unchanged message are saved in `monitor_state.json`. Incomplete checks fail the run and do not send an unchanged message or save partial statuses.
+When one cohort opens, the bot sends a 🟢 message with that cohort's link. When both open at the same check, it sends a 🔵 message with both links. When all monitored cohorts are closed, it sends a 🔴 message with their links. If registration remains open without a new opening, the bot reports that it is still open. Telegram messages use Markdown for bold headings. On scheduled runs, a confirmed change sends a message immediately; unchanged status sends at most one message per hour. Only scheduled runs update `monitor_state.json`. Incomplete checks fail the run and do not send an unchanged message or save partial statuses. Manual and scheduled runs use separate concurrency groups so a manual run does not queue scheduled checks.
 
 The independent `Schedule probe (hourly)` workflow is scheduled at minute 13 of each hour in Israel time. It only records its event type and UTC time in the run log; it does not check Eventer or send Telegram. An Actions run with `event=schedule` confirms that GitHub started an automatic run. A manual run does not confirm this.
 
