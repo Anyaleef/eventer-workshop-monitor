@@ -56,10 +56,10 @@ def check_page(browser, url):
         page.close()
 
 
-def send_telegram_text(message):
+def send_telegram_text(message, parse_mode="Markdown"):
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
-    payload = urlencode({"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}).encode("utf-8")
+    payload = urlencode({"chat_id": chat_id, "text": message, "parse_mode": parse_mode}).encode("utf-8")
     request = Request(f"https://api.telegram.org/bot{token}/sendMessage", data=payload, method="POST")
     with urlopen(request, timeout=20) as response:
         result = json.load(response)
