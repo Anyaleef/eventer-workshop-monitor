@@ -56,7 +56,7 @@ def check_page(browser, url):
 def send_telegram_text(message):
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
-    payload = urlencode({"chat_id": chat_id, "text": message}).encode("utf-8")
+    payload = urlencode({"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}).encode("utf-8")
     request = Request(f"https://api.telegram.org/bot{token}/sendMessage", data=payload, method="POST")
     with urlopen(request, timeout=20) as response:
         result = json.load(response)
@@ -64,23 +64,36 @@ def send_telegram_text(message):
         raise RuntimeError("Telegram did not accept the alert")
 
 
-def status_line(name, status):
-    label = "🟢 ניתן להירשם" if status == "open" else "🔴 אין כרגע אפשרות להירשם"
-    return f"{label}: {name}"
+def availability_message(statuses, changes):
+    first_url = WORKSHOPS["t242f"][1]
+    second_url = WORKSHOPS["rmh2f"][1]
+    opened = [key for key in WORKSHOPS if changes.get(key) == "open"]
+    if len(opened) == 2:
+        return ("🔵 *נפתחו מקומות הרשמה חדשים!*\n"
+                "ניתן להירשם לשני המחזורים של Claude Code for Everyone\n"
+                f"- מחזור 1: {first_url}\n- מחזור 2: {second_url}")
+    if len(opened) == 1:
+        key = opened[0]
+        cohort = 1 if key == "t242f" else 2
+        return ("🟢 *נפתח מקום הרשמה חדש!*\n"
+                f"ניתן להירשם למחזור {cohort} של Claude Code for Everyone\n"
+                f"{WORKSHOPS[key][1]}")
+    if all(status == "sold_out" for status in statuses.values()):
+        return ("🔴 *אין מקומות הרשמה פנויים*\n"
+                "שני המחזורים של Claude Code for Everyone סגורים להרשמה.\n"
+                f"- מחזור 1: {first_url}\n- מחזור 2: {second_url}")
 
-
-def unchanged_message(statuses):
-    lines = ["🔵 אין שינוי בזמינות הסדנאות מאז הבדיקה הקודמת:"]
-    lines.extend(status_line(WORKSHOPS[key][0], status) for key, status in statuses.items())
-    return "\n".join(lines)
-
-
-def changed_message(changes):
-    lines = ["🟡 שינוי בזמינות הסדנאות:"]
-    for key, status in changes.items():
-        name, url = WORKSHOPS[key]
-        lines.extend((status_line(name, status), url))
-    return "\n".join(lines)
+    # An unchanged open page must not be reported as newly opened or closed.
+    open_keys = [key for key in WORKSHOPS if statuses[key] == "open"]
+    if len(open_keys) == 2:
+        return ("🔵 *ההרשמה עדיין פתוחה*\n"
+                "ניתן להירשם לשני המחזורים של Claude Code for Everyone\n"
+                f"- מחזור 1: {first_url}\n- מחזור 2: {second_url}")
+    key = open_keys[0]
+    cohort = 1 if key == "t242f" else 2
+    return ("🟢 *ההרשמה עדיין פתוחה*\n"
+            f"ניתן להירשם למחזור {cohort} של Claude Code for Everyone\n"
+            f"{WORKSHOPS[key][1]}")
 
 
 def hourly_notice_due(state, now):
@@ -144,10 +157,10 @@ def main():
         changes = {key: status for key, status in statuses.items() if state.get(key) != status}
         now = datetime.now(timezone.utc)
         if changes:
-            send_telegram_text(changed_message(changes))
+            send_telegram_text(availability_message(statuses, changes))
             print("Telegram change alert sent", flush=True)
         elif hourly_notice_due(state, now):
-            send_telegram_text(unchanged_message(statuses))
+            send_telegram_text(availability_message(statuses, changes))
             state["_last_no_change_message_at"] = now.isoformat()
             print("Telegram no-change status sent", flush=True)
         state.update(statuses)
