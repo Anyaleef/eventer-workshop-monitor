@@ -34,23 +34,27 @@ jobs:
           from datetime import date, datetime
           from zoneinfo import ZoneInfo
           import os
-          active = datetime.now(ZoneInfo("Asia/Jerusalem")).date() < date(2026, 10, 13)
+          today = datetime.now(ZoneInfo("Asia/Jerusalem")).date()
+          cohorts_active = today < date(2026, 10, 13)
+          listing_active = today < date(2026, 10, 23)
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"active={str(active).lower()}\n")
-          if not active:
-              print("Monitoring period finished; skipping page checks and notifications")
+              output.write(f"cohorts_active={str(cohorts_active).lower()}\n")
+              output.write(f"listing_active={str(listing_active).lower()}\n")
+          if not listing_active:
+              print("AI Days finished; skipping page checks")
           PY
       - uses: actions/setup-python@v6
-        if: steps.window.outputs.active == 'true'
+        if: steps.window.outputs.listing_active == 'true'
         with:
           python-version: '3.12'
           cache: pip
       - run: pip install -r requirements.txt
-        if: steps.window.outputs.active == 'true'
-      - run: python -m playwright install --with-deps chromium
-        if: steps.window.outputs.active == 'true'
+        if: steps.window.outputs.listing_active == 'true'
+      - id: browser
+        run: python -m playwright install --with-deps chromium
+        if: steps.window.outputs.listing_active == 'true'
       - name: Check availability
-        if: steps.window.outputs.active == 'true'
+        if: steps.window.outputs.cohorts_active == 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -60,6 +64,12 @@ jobs:
           else
             python monitor.py
           fi
+      - name: Check AI Days registration links
+        if: always() && github.event_name == 'schedule' && steps.window.outputs.listing_active == 'true' && steps.browser.outcome == 'success'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python ai_days_monitor.py
       - name: Save latest statuses
         if: always() && github.event_name == 'schedule'
         run: |
