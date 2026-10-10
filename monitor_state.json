@@ -1,5 +1,6 @@
 {
   "t242f": "sold_out",
-  "rmh2f": "sold_out",
-  "_last_no_change_message_at": "2026-10-10T19:15:15.517291+00:00"
+  "rmh2f": "open",
+  "_last_no_change_message_at": "2026-10-10T19:15:15.517291+00:00",
+  "_end_notice_t242f": "2026-10-11"
 }
